@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMNI-INTEL v7.0 | Elite Identity Terminal</title>
+    <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+    <style>
+        :root {
+            --primary: #00f2fe;
+            --accent: #ff0055;
+            --bg: #010203;
+            --card-bg: rgba(10, 12, 18, 0.95);
+            --terminal: #00ff41;
+            --glass: rgba(0, 242, 254, 0.05);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'JetBrains Mono', 'Courier New', monospace; cursor: crosshair; }
+        body { background: var(--bg); color: #e0e0e0; overflow-x: hidden; line-height: 1.6; }
+
+        /* --- IMMERSIVE BACKGROUND --- */
+        #matrix-canvas { position: fixed; top: 0; left: 0; z-index: -1; opacity: 0.15; }
+        .vignette { position: fixed; inset: 0; background: radial-gradient(circle, transparent 20%, black 120%); pointer-events: none; z-index: 1; }
+
+        /* --- HUD TOP BAR --- */
+        #hud {
+            position: fixed; top: 0; width: 100%; display: flex; justify-content: space-between;
+            padding: 10px 30px; font-size: 10px; color: var(--primary); z-index: 2000;
+            background: rgba(0,0,0,0.8); border-bottom: 1px solid rgba(0, 242, 254, 0.2);
+            letter-spacing: 1px;
+        }
+
+        /* --- GLITCH INTRO --- */
+        #intro-splash {
+            position: fixed; inset: 0; background: #000; z-index: 9999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: 1s ease-in-out;
+        }
+        .glitch { font-size: 3rem; font-weight: 900; color: var(--primary); position: relative; }
+        .glitch::before, .glitch::after { content: 'OMNI-INTEL'; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .glitch::before { left: 2px; text-shadow: -2px 0 var(--accent); animation: glitch-1 2s infinite linear alternate-reverse; }
+        .glitch::after { left: -2px; text-shadow: -2px 0 var(--terminal); animation: glitch-2 2s infinite linear alternate-reverse; }
+        
+        @keyframes glitch-1 { 0% { clip-path: inset(20% 0 30% 0); } 100% { clip-path: inset(10% 0 60% 0); } }
+        @keyframes glitch-2 { 0% { clip-path: inset(50% 0 10% 0); } 100% { clip-path: inset(40% 0 50% 0); } }
+
+        /* --- NAVIGATION --- */
+        nav {
+            padding: 20px 5%; display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.9); border-bottom: 1px solid var(--primary);
+            position: fixed; width: 100%; top: 30px; z-index: 1000;
+        }
+        .logo { font-weight: 900; color: var(--primary); letter-spacing: 5px; cursor: pointer; font-size: 1.2rem; }
+        .nav-links span { margin-left: 25px; cursor: pointer; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; color: #888; transition: 0.3s; }
+        .nav-links span:hover { color: var(--primary); text-shadow: 0 0 10px var(--primary); }
+
+        /* --- PAGE SYSTEM --- */
+        .page { display: none; min-height: 100vh; padding: 160px 5% 50px; flex-direction: column; align-items: center; }
+        .active { display: flex; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; filter: blur(10px); } to { opacity: 1; filter: blur(0); } }
+
+        /* --- MODULE GRID --- */
+        .module-grid { 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+            gap: 20px; width: 100%; max-width: 1200px; margin-top: 30px;
+        }
+        .module-card {
+            background: var(--card-bg); border: 1px solid #222; padding: 25px;
+            position: relative; overflow: hidden; transition: 0.3s;
+        }
+        .module-card:hover { border-color: var(--primary); transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0, 242, 254, 0.1); }
+        .module-card::after { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: var(--primary); transform: translateX(-100%); transition: 0.5s; }
+        .module-card:hover::after { transform: translateX(0); }
+        .module-card h3 { font-size: 0.8rem; color: var(--primary); margin-bottom: 15px; letter-spacing: 2px; }
+
+        /* --- SCANNER ELEMENTS --- */
+        .search-container { width: 100%; max-width: 800px; margin-bottom: 50px; text-align: center; }
+        .search-bar { display: flex; background: #000; border: 1px solid #333; padding: 5px; border-radius: 4px; }
+        input { flex: 1; background: transparent; border: none; color: var(--terminal); padding: 15px; outline: none; font-size: 1rem; }
+        .btn-scan { background: var(--primary); color: #000; border: none; padding: 0 30px; font-weight: 900; cursor: pointer; transition: 0.3s; }
+        .btn-scan:hover { background: #fff; box-shadow: 0 0 20px var(--primary); }
+
+        /* --- DOSSIER UI --- */
+        .dossier-layout { display: grid; grid-template-columns: 300px 1fr; gap: 40px; width: 100%; max-width: 1100px; }
+        .dossier-image-box { border: 2px solid var(--primary); position: relative; padding: 10px; background: #000; }
+        .dossier-image-box img { width: 100%; filter: grayscale(100%) contrast(1.2) brightness(0.8); }
+        .scan-line { position: absolute; width: 100%; height: 2px; background: var(--primary); top: 0; animation: scanLine 3s linear infinite; box-shadow: 0 0 10px var(--primary); }
+        @keyframes scanLine { 0% { top: 0; } 100% { top: 100%; } }
+
+        /* --- FOOTER --- */
+        .footer { margin-top: auto; padding: 30px; text-align: center; border-top: 1px solid #111; font-size: 0.7rem; color: #444; width: 100%; }
+        .highlight { color: var(--primary); }
+
+        /* --- TERMINAL OVERLAY --- */
+        #terminal-overlay {
+            position: fixed; bottom: 20px; left: 20px; width: 300px; height: 150px;
+            background: rgba(0,0,0,0.9); border: 1px solid #333; font-size: 9px;
+            padding: 10px; color: var(--terminal); overflow: hidden; z-index: 1001; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <div>NODE_STATUS: <span style="color:var(--terminal)">ENCRYPTED</span> | ARCHITECTS: @XLIVINGLEGEND & @SOLOXRESPECT</div>
+        <div id="live-clock">00:00:00</div>
+        <div>UPLINK: ACTIVE_SECURE_ALPHA</div>
+    </div>
+
+    <canvas id="matrix-canvas"></canvas>
+    <div class="vignette"></div>
+
+    <div id="intro-splash">
+        <div class="glitch" data-text="OMNI-INTEL">OMNI-INTEL</div>
+        <p style="color:var(--terminal); font-size: 0.7rem; margin-top: 15px; letter-spacing: 5px;">AUTHORIZING BIOMETRIC UPLINK...</p>
+    </div>
+
+    <nav>
+        <div class="logo" onclick="showPage('home')">OMNI-INTEL <span style="font-size: 10px; vertical-align: middle; opacity: 0.5;">v7.0</span></div>
+        <div class="nav-links">
+            <span onclick="showPage('home')">Dashboard</span>
+            <span onclick="showPage('hub')">Module Hub</span>
+            <span onclick="showPage('vault')">The Vault</span>
+            <span onclick="showPage('about')">Documentation</span>
+        </div>
+    </nav>
+
+    <section id="home" class="page active">
+        <div class="search-container">
+            <h1 style="font-size: 3rem; margin-bottom: 10px; letter-spacing: -2px;">IDENTITY <span class="highlight">TERMINAL</span></h1>
+            <p style="color: #666; font-size: 0.8rem; margin-bottom: 30px;">[~] CROSS-REFERENCING GLOBAL PUBLIC DATABASES</p>
+            
+            <div class="search-bar">
+                <input type="text" id="targetInput" placeholder="Enter Identity Name for Deep Scan..." onkeypress="handleEnter(event)">
+                <button class="btn-scan" onclick="startDeepScan()">SCAN</button>
+            </div>
+        </div>
+
+        <div id="resultsArea" style="width: 100%; max-width: 800px;"></div>
+    </section>
+
+    <section id="hub" class="page">
+        <h2 style="margin-bottom: 30px;">INTELLIGENCE <span class="highlight">MODULES</span></h2>
+        <div class="module-grid">
+            <div class="module-card">
+                <h3>01. USERNAME_CHECKER</h3>
+                <input type="text" id="userInp" placeholder="Handle...">
+                <button class="btn-scan" style="width:100%; margin-top:10px; font-size: 10px;" onclick="addLog('Scanning social nodes...')">SCAN SOCIALS</button>
+            </div>
+            <div class="module-card">
+                <h3>02. METADATA_EXTRACTOR</h3>
+                <input type="file" id="fileInp" onchange="extractMeta()" style="font-size: 10px;">
+                <div id="metaOut" style="font-size: 9px; margin-top: 10px; color: var(--terminal)"></div>
+            </div>
+            <div class="module-card">
+                <h3>05. PERSONALITY_MAPPER</h3>
+                <p style="font-size: 0.7rem; color: #555;">Analyze digital footprint for behavioral traits.</p>
+                <button class="btn-scan" style="width:100%; margin-top:10px; font-size: 10px;">GENERATE MAP</button>
+            </div>
+            <div class="module-card">
+                <h3>25. FAKE_ID_GENERATOR</h3>
+                <button class="btn-scan" style="width:100%; margin-top:10px; font-size: 10px;" onclick="generateFake()">GENERATE DUMMY DATA</button>
+                <div id="fakeOut" style="font-size: 10px; margin-top: 10px; color: var(--accent)"></div>
+            </div>
+        </div>
+    </section>
+
+    <section id="dossier-page" class="page">
+        <div class="dossier-layout">
+            <div class="dossier-image-box">
+                <div class="scan-line"></div>
+                <img id="dos-img" src="">
+                <div style="margin-top: 15px; font-size: 0.7rem;">
+                    <p><span class="highlight">UID:</span> <span id="dos-uid"></span></p>
+                    <p><span class="highlight">CLEARANCE:</span> LEVEL_4_CONFIDENTIAL</p>
+                </div>
+            </div>
+            <div style="background: var(--card-bg); padding: 40px; border-top: 4px solid var(--primary);">
+                <h1 id="dos-name" style="font-size: 3.5rem; letter-spacing: -2px;">NAME</h1>
+                <div id="dos-bio" style="margin-top: 20px; font-size: 0.9rem; color: #aaa;"></div>
+                
+                <div style="margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div style="border: 1px solid #222; padding: 15px;">
+                        <h4 style="font-size: 0.7rem; color: var(--primary);">SOCIAL NODES</h4>
+                        <p id="dos-social" style="font-size: 0.75rem; color: #888; margin-top: 5px;"></p>
+                    </div>
+                    <div style="border: 1px solid #222; padding: 15px;">
+                        <h4 style="font-size: 0.7rem; color: var(--primary);">PREDICTED EMAIL</h4>
+                        <p id="dos-email" style="font-size: 0.75rem; color: #888; margin-top: 5px;"></p>
+                    </div>
+                </div>
+                <button class="btn-scan" style="margin-top: 30px;" onclick="showPage('home')">TERMINAL RESET</button>
+            </div>
+        </div>
+    </section>
+
+    <section id="vault" class="page">
+        <h1 style="color: var(--accent)">THE VAULT (OOL)</h1>
+        <p style="font-size: 0.8rem; margin-bottom: 40px;">SECURE ACCESS TO DECLASSIFIED EVIDENCE</p>
+        <table style="width: 100%; max-width: 1000px; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #111; color: var(--primary); font-size: 0.8rem;">
+                    <th style="padding: 15px; border: 1px solid #222;">CODE</th>
+                    <th style="padding: 15px; border: 1px solid #222;">INTEL NATURE</th>
+                </tr>
+            </thead>
+            <tbody style="font-size: 0.75rem; color: #888;">
+                <tr><td style="padding: 15px; border: 1px solid #222;">MK-ULTRA</td><td style="padding: 15px; border: 1px solid #222;">Behavioral engineering records.</td></tr>
+                <tr><td style="padding: 15px; border: 1px solid #222;">PROJECT STARGATE</td><td style="padding: 15px; border: 1px solid #222;">Remote viewing archives.</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <div id="terminal-overlay"></div>
+
+    <footer class="footer">
+        PROJECT ARCHITECTS: <span class="highlight">@XLIVINGLEGEND & @SOLOXRESPECT</span> // SECURE DATA NODE
+    </footer>
+
+    <script>
+        // --- INTRO & SOUND ---
+        const audio = new Audio('https://www.soundjay.com/communication/typewriter-key-1.mp3');
+        window.onload = () => {
+            setTimeout(() => {
+                document.getElementById('intro-splash').style.opacity = '0';
+                setTimeout(() => document.getElementById('intro-splash').style.display = 'none', 1000);
+            }, 3000);
+            initMatrix();
+        };
+
+        function handleEnter(e) { if(e.key === 'Enter') startDeepScan(); }
+
+        // --- MATRIX BACKGROUND ---
+        function initMatrix() {
+            const canvas = document.getElementById('matrix-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*";
+            const fontSize = 12;
+            const columns = canvas.width / fontSize;
+            const drops = Array(Math.floor(columns)).fill(1);
+
+            function draw() {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#00ff41"; ctx.font = fontSize + "px monospace";
+                drops.forEach((y, i) => {
+                    const text = letters[Math.floor(Math.random() * letters.length)];
+                    ctx.fillText(text, i * fontSize, y * fontSize);
+                    if (y * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                    drops[i]++;
+                });
+            }
+            setInterval(draw, 50);
+        }
+
+        // --- CORE LOGIC ---
+        function addLog(msg) {
+            const term = document.getElementById('terminal-overlay');
+            const line = document.createElement('div');
+            line.innerHTML = `> [${new Date().toLocaleTimeString()}] ${msg}`;
+            term.prepend(line);
+            audio.play();
+        }
+
+        function showPage(id) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        async function startDeepScan() {
+            const name = document.getElementById('targetInput').value;
+            if(!name) return;
+            addLog(`Initiating heuristic scan for: ${name}`);
+            
+            try {
+                const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`);
+                const data = await res.json();
+                
+                const resultsArea = document.getElementById('resultsArea');
+                resultsArea.innerHTML = `
+                    <div class="module-card" onclick="viewDossier('${encodeURIComponent(JSON.stringify(data))}')" style="cursor:pointer; border-left: 5px solid var(--primary);">
+                        <div style="display:flex; gap:20px;">
+                            <img src="${data.thumbnail?.source || 'https://via.placeholder.com/100'}" style="width:80px; height:80px; object-fit:cover;">
+                            <div>
+                                <h3 style="margin:0">${data.title.toUpperCase()}</h3>
+                                <p style="font-size:0.7rem; color:#666; margin-top:5px;">${data.extract?.substring(0, 100)}...</p>
+                                <p style="color:var(--terminal); font-size:10px; margin-top:10px;">> ACCESS DATA STREAM</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch(e) { addLog("SCAN_ERROR: CONNECTION_REFUSED"); }
+        }
+
+        function viewDossier(encodedData) {
+            const data = JSON.parse(decodeURIComponent(encodedData));
+            document.getElementById('dos-name').innerText = data.title;
+            document.getElementById('dos-bio').innerText = data.extract || "Classified information.";
+            document.getElementById('dos-img').src = data.thumbnail?.source || '';
+            document.getElementById('dos-uid').innerText = Math.floor(Math.random()*1000000);
+            document.getElementById('dos-social').innerText = `@${data.title.toLowerCase().replace(/\s/g, '')}_official`;
+            document.getElementById('dos-email').innerText = `${data.title.toLowerCase().split(' ')[0]}@protonmail.com`;
+            showPage('dossier-page');
+            addLog("DOSSIER_ACCESS_GRANTED");
+        }
+
+        function generateFake() {
+            const names = ["Dmitri Volk", "Alex Vance", "Sarah Connor", "John Doe"];
+            document.getElementById('fakeOut').innerText = `GEN: ${names[Math.floor(Math.random()*names.length)]} | IP: 104.22.${Math.floor(Math.random()*255)}.1`;
+            addLog("Synthetic data generated.");
+        }
+
+        // --- EXIF EXTRACTION ---
+        function extractMeta() {
+            const file = document.getElementById('fileInp').files[0];
+            EXIF.getData(file, function() {
+                const tags = EXIF.getAllTags(this);
+                document.getElementById('metaOut').innerText = JSON.stringify(tags, null, 2);
+                addLog("Metadata extracted.");
+            });
+        }
+
+        setInterval(() => {
+            document.getElementById('live-clock').innerText = new Date().toLocaleTimeString();
+        }, 1000);
+    </script>
+</body>
+</html>
